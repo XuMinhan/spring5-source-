@@ -376,7 +376,7 @@ class AnnotationsScannerTests {
 				"2:TestAnnotation6", "3:TestAnnotation2", "3:TestInheritedAnnotation2",
 				"4:TestAnnotation3", "5:TestAnnotation4");
 	}
-
+	//对范型的支持
 	@Test
 	void typeHierarchyStrategyOnBridgeMethodScansAnnotations() throws Exception {
 		Method source = BridgedMethod.class.getDeclaredMethod("method", Object.class);

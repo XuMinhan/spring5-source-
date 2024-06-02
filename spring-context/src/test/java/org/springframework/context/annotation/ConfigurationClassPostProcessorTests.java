@@ -104,8 +104,10 @@ class ConfigurationClassPostProcessorTests {
 		ConfigurationClassPostProcessor pp = new ConfigurationClassPostProcessor();
 		pp.postProcessBeanFactory(beanFactory);
 		assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("config")).hasBeanClass()).isTrue();
-		Foo foo = beanFactory.getBean("foo", Foo.class);
 		Bar bar = beanFactory.getBean("bar", Bar.class);
+
+		Foo foo = beanFactory.getBean("foo", Foo.class);
+//		Bar bar = beanFactory.getBean("bar", Bar.class);
 		assertThat(bar.foo).isSameAs(foo);
 		assertThat(beanFactory.getDependentBeans("foo")).contains("bar");
 		assertThat(beanFactory.getDependentBeans("config")).contains("foo");
@@ -216,7 +218,12 @@ class ConfigurationClassPostProcessorTests {
 	@Test
 	void postProcessorWorksWithComposedConfigurationUsingReflection() {
 		RootBeanDefinition beanDefinition = new RootBeanDefinition(ComposedConfigurationClass.class);
-		assertSupportForComposedAnnotation(beanDefinition);
+		beanFactory.registerBeanDefinition("config", beanDefinition);
+		ConfigurationClassPostProcessor pp = new ConfigurationClassPostProcessor();
+		pp.setEnvironment(new StandardEnvironment());
+		pp.postProcessBeanFactory(beanFactory);
+		SimpleComponent simpleComponent = beanFactory.getBean(SimpleComponent.class);
+		assertThat(simpleComponent).isNotNull();
 	}
 
 	@Test

@@ -177,7 +177,7 @@ class ConstructorResolver {
 							"] from ClassLoader [" + beanClass.getClassLoader() + "] failed", ex);
 				}
 			}
-
+			// 如果candidateList只有一个元素 && 没有传入构造函数值 && mbd也没有构造函数参数值
 			if (candidates.length == 1 && explicitArgs == null && !mbd.hasConstructorArgumentValues()) {
 				Constructor<?> uniqueCandidate = candidates[0];
 				if (uniqueCandidate.getParameterCount() == 0) {
@@ -205,7 +205,7 @@ class ConstructorResolver {
 				resolvedValues = new ConstructorArgumentValues();
 				minNrOfArgs = resolveConstructorArguments(beanName, mbd, bw, cargs, resolvedValues);
 			}
-
+			// 对候选的构造函数进行排序，先是访问权限后是参数个数，public权限参数数量由多到少
 			AutowireUtils.sortConstructors(candidates);
 			int minTypeDiffWeight = Integer.MAX_VALUE;
 			Set<Constructor<?>> ambiguousConstructors = null;
@@ -224,8 +224,8 @@ class ConstructorResolver {
 				}
 
 				ArgumentsHolder argsHolder;
-				Class<?>[] paramTypes = candidate.getParameterTypes();
-				if (resolvedValues != null) {
+				Class<?>[] paramTypes = candidate.getParameterTypes();// 获取构造函数上的ConstructorProperties注解中的参数
+				if (resolvedValues != null) { //如果没有上面的注解，则获取构造函数参数列表中属性的名称
 					try {
 						String[] paramNames = null;
 						if (resolvedValues.containsNamedArgument()) {
@@ -236,10 +236,10 @@ class ConstructorResolver {
 									paramNames = pnd.getParameterNames(candidate);
 								}
 							}
-						}
+						}		// 根据名称和数据类型创建参数持有者
 						argsHolder = createArgumentArray(beanName, mbd, resolvedValues, bw, paramTypes, paramNames,
 								getUserDeclaredConstructor(candidate), autowiring, candidates.length == 1);
-					}
+					}//搞不定直接continue
 					catch (UnsatisfiedDependencyException ex) {
 						if (logger.isTraceEnabled()) {
 							logger.trace("Ignoring constructor [" + candidate + "] of bean '" + beanName + "': " + ex);

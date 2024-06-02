@@ -91,7 +91,8 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  * @author Chris Beams
  * @author Stephane Nicoll
  */
-class AutowiredAnnotationBeanPostProcessorTests {
+class
+AutowiredAnnotationBeanPostProcessorTests {
 
 	private DefaultListableBeanFactory bf = new DefaultListableBeanFactory();
 

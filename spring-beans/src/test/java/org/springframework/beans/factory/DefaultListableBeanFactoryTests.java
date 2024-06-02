@@ -1260,6 +1260,7 @@ class DefaultListableBeanFactoryTests {
 		assertThat(ab.getIntegerArray()).isNull();
 	}
 
+	//abs 1244；con195
 	@Test
 	void doubleArrayConstructorWithAutowiring() throws MalformedURLException {
 		lbf.registerSingleton("integer1", 4);

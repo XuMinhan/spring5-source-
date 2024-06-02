@@ -76,7 +76,9 @@ class ConfigurationClassEnhancer {
 
 	// The callbacks to use. Note that these callbacks must be stateless.
 	static final Callback[] CALLBACKS = new Callback[] {
+			// 拦截 @Bean 方法的调用,以确保正确处理@Bean语义
 			new BeanMethodInterceptor(),
+			// 拦截 BeanFactoryAware#setBeanFactory 的调用
 			new BeanFactoryAwareMethodInterceptor(),
 			NoOp.INSTANCE
 	};
@@ -127,13 +129,20 @@ class ConfigurationClassEnhancer {
 	 * Creates a new CGLIB {@link Enhancer} instance.
 	 */
 	private Enhancer newEnhancer(Class<?> configSuperClass, @Nullable ClassLoader classLoader) {
+		// Spring重新打包了CGLIB（使用Spring专用补丁;仅供内部使用）
+		// 这样可避免在应用程序级别或第三方库和框架上与CGLIB的依赖性发生任何潜在冲突
 		Enhancer enhancer = new Enhancer();
 		enhancer.setSuperclass(configSuperClass);
+		// 设置需要实现的接口,也就是说,我们的配置类的cglib代理还实现的 EnhancedConfiguration 接口
 		enhancer.setInterfaces(new Class<?>[] {EnhancedConfiguration.class});
 		enhancer.setUseFactory(false);
+		// 设置命名策略
 		enhancer.setNamingPolicy(SpringNamingPolicy.INSTANCE);
 		enhancer.setAttemptLoad(true);
+		// 设置生成器创建字节码策略
+		// BeanFactoryAwareGeneratorStrategy 是 CGLIB的DefaultGeneratorStrategy的自定义扩展，主要为了引入BeanFactory字段
 		enhancer.setStrategy(new BeanFactoryAwareGeneratorStrategy(classLoader));
+		// 设置增强
 		enhancer.setCallbackFilter(CALLBACK_FILTER);
 		enhancer.setCallbackTypes(CALLBACK_FILTER.getCallbackTypes());
 		return enhancer;
@@ -291,7 +300,8 @@ class ConfigurationClassEnhancer {
 		@Nullable
 		public Object intercept(Object enhancedConfigInstance, Method beanMethod, Object[] beanMethodArgs,
 					MethodProxy cglibMethodProxy) throws Throwable {
-
+			// enhancedConfigInstance 已经是配置类的增强对象了,在增强对象中,有beanFactory字段的
+			// 获取增强对象中的beanFactory
 			ConfigurableBeanFactory beanFactory = getBeanFactory(enhancedConfigInstance);
 			String beanName = BeanAnnotationHelper.determineBeanNameFor(beanMethod);
 
@@ -310,6 +320,8 @@ class ConfigurationClassEnhancer {
 			// proxy that intercepts calls to getObject() and returns any cached bean instance.
 			// This ensures that the semantics of calling a FactoryBean from within @Bean methods
 			// is the same as that of referring to a FactoryBean within XML. See SPR-6602.
+			// 检查容器中是否存在对应的 FactoryBean 如果存在,则创建一个增强类
+			// 通过创建增强类来代理拦截 getObject（）的调用 , 以确保了FactoryBean的语义
 			if (factoryContainsBean(beanFactory, BeanFactory.FACTORY_BEAN_PREFIX + beanName) &&
 					factoryContainsBean(beanFactory, beanName)) {
 				Object factoryBean = beanFactory.getBean(BeanFactory.FACTORY_BEAN_PREFIX + beanName);
@@ -318,10 +330,22 @@ class ConfigurationClassEnhancer {
 				}
 				else {
 					// It is a candidate FactoryBean - go ahead with enhancement
+					// 创建增强类,来代理 getObject（）的调用
+					// 有两种可选代理方式,cglib 和 jdk
+					// Proxy.newProxyInstance(
+					//                    factoryBean.getClass().getClassLoader(), new Class<?>[]{interfaceType},
+					//                    (proxy, method, args) -> {
+					//                        if (method.getName().equals("getObject") && args == null) {
+					//                            return beanFactory.getBean(beanName);
+					//                        }
+					//                        return ReflectionUtils.invokeMethod(method, factoryBean, args);
+					//                    });
 					return enhanceFactoryBean(factoryBean, beanMethod.getReturnType(), beanFactory, beanName);
 				}
 			}
-
+			// 判断当时执行的方法是否为@Bean方法本身
+			// 举个例子 : 如果是直接调用@Bean方法,也就是Spring来调用我们的@Bean方法,则返回true
+			// 如果是在别的方法内部,我们自己的程序调用 @Bean方法,则返回false
 			if (isCurrentlyInvokedFactoryMethod(beanMethod)) {
 				// The factory is calling the bean method in order to instantiate and register the bean
 				// (i.e. via a getBean() call) -> invoke the super implementation of the method to actually
@@ -336,9 +360,12 @@ class ConfigurationClassEnhancer {
 									"these container lifecycle issues; see @Bean javadoc for complete details.",
 							beanMethod.getDeclaringClass().getSimpleName(), beanMethod.getName()));
 				}
+				// 如果返回true,也就是Spring在调用这个方法,那么就去真正执行该方法
 				return cglibMethodProxy.invokeSuper(enhancedConfigInstance, beanMethodArgs);
 			}
-
+			//否则,则尝试从容器中获取该 Bean 对象
+			// 怎么获取呢? 通过调用 beanFactory.getBean 方法
+			// 而这个getBean 方法,如果对象已经创建则直接返回,如果还没有创建,则创建,然后放入容器中,然后返回
 			return resolveBeanReference(beanMethod, beanMethodArgs, beanFactory, beanName);
 		}
 

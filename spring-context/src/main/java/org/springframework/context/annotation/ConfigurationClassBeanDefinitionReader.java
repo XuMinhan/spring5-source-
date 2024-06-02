@@ -229,7 +229,7 @@ class ConfigurationClassBeanDefinitionReader {
 			beanDef.setFactoryBeanName(configClass.getBeanName());
 			beanDef.setUniqueFactoryMethodName(methodName);
 		}
-
+		//设置获取方法
 		if (metadata instanceof StandardMethodMetadata smm &&
 				configClass.getMetadata() instanceof StandardAnnotationMetadata sam) {
 			Method method = ClassUtils.getMostSpecificMethod(smm.getIntrospectedMethod(), sam.getIntrospectedClass());

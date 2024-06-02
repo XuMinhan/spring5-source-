@@ -479,7 +479,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 * @param beanName the name of the bean
 	 * @param dependentBeanName the name of the dependent bean
 	 */
-	public void registerDependentBean(String beanName, String dependentBeanName) {
+	public void  registerDependentBean(String beanName, String dependentBeanName) {
 		String canonicalName = canonicalName(beanName);
 
 		synchronized (this.dependentBeanMap) {

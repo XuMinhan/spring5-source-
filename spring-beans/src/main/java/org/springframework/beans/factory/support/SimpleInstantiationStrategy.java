@@ -88,7 +88,7 @@ public class SimpleInstantiationStrategy implements InstantiationStrategy {
 			return BeanUtils.instantiateClass(constructorToUse);
 		}
 		else {
-			// Must generate CGLIB subclass.
+			//必须生成 CGLIB 子类。
 			return instantiateWithMethodInjection(bd, beanName, owner);
 		}
 	}
