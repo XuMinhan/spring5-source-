@@ -1059,14 +1059,14 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 					beanFactory.getBean(CONVERSION_SERVICE_BEAN_NAME, ConversionService.class));
 		}
 
-		// Register a default embedded value resolver if no BeanFactoryPostProcessor
-		// (such as a PropertySourcesPlaceholderConfigurer bean) registered any before:
-		// at this point, primarily for resolution in annotation attribute values.
+		//如果没有 BeanFactoryPostProcessor，请注册默认的嵌入值解析器
+		//（例如 PropertySourcesPlaceholderConfigurer bean）之前注册的任何：
+		//此时，主要用于注释属性值的分辨率。
 		if (!beanFactory.hasEmbeddedValueResolver()) {
 			beanFactory.addEmbeddedValueResolver(strVal -> getEnvironment().resolvePlaceholders(strVal));
 		}
 
-		// Initialize LoadTimeWeaverAware beans early to allow for registering their transformers early.
+		//尽早初始化 LoadTimeWeaverAware bean，以便尽早注册其转换器。
 		String[] weaverAwareNames = beanFactory.getBeanNamesForType(LoadTimeWeaverAware.class, false, false);
 		for (String weaverAwareName : weaverAwareNames) {
 			beanFactory.getBean(weaverAwareName, LoadTimeWeaverAware.class);

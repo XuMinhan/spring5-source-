@@ -167,7 +167,7 @@ class ApplicationListenerMethodAdapterTests extends AbstractApplicationEventList
 				SampleEvents.class, "moreThanOneParameter", String.class, Integer.class);
 		assertThatIllegalStateException().isThrownBy(() -> createTestInstance(method));
 	}
-
+	//moximoxi
 	@Test
 	void defaultOrder() {
 		Method method = ReflectionUtils.findMethod(
@@ -216,7 +216,13 @@ class ApplicationListenerMethodAdapterTests extends AbstractApplicationEventList
 		Method method = ReflectionUtils.findMethod
 				(SampleEvents.class, "handleGenericStringPayload", EntityWrapper.class);
 		EntityWrapper<Integer> payload = new EntityWrapper<>(123);
-		invokeListener(method, new PayloadApplicationEvent<>(this, payload));
+		PayloadApplicationEvent<EntityWrapper<Integer>> event = new PayloadApplicationEvent<>(this, payload);
+		ApplicationListenerMethodAdapter adapter = createTestInstance(method);
+
+		supportsEventType(false,method, ResolvableType.forInstance(event));
+
+
+		adapter.onApplicationEvent(event);
 		verify(this.sampleEvents, times(0)).handleGenericStringPayload(any());
 	}
 
@@ -251,7 +257,7 @@ class ApplicationListenerMethodAdapterTests extends AbstractApplicationEventList
 				invokeListener(method, event))
 			.withCauseInstanceOf(IOException.class);
 	}
-
+	//todo
 	@Test
 	void invokeListenerInvalidProxy() {
 		Object target = new InvalidProxyTestBean();
@@ -434,7 +440,7 @@ class ApplicationListenerMethodAdapterTests extends AbstractApplicationEventList
 		return new StaticApplicationListenerMethodAdapter(method, this.sampleEvents);
 	}
 
-	private ResolvableType createPayloadEventType(Class<?> payloadType) {
+	private ResolvableType /**/createPayloadEventType(Class<?> payloadType) {
 		return ResolvableType.forClassWithGenerics(PayloadApplicationEvent.class, payloadType);
 	}
 

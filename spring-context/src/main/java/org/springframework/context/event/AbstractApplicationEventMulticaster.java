@@ -193,7 +193,7 @@ public abstract class AbstractApplicationEventMulticaster
 		Class<?> sourceType = (source != null ? source.getClass() : null);
 		ListenerCacheKey cacheKey = new ListenerCacheKey(eventType, sourceType);
 
-		// Potential new retriever to populate
+		// 要填充的潜在新寻回犬
 		CachedListenerRetriever newRetriever = null;
 
 		// Quick check for existing entry on ConcurrentHashMap
@@ -230,23 +230,24 @@ public abstract class AbstractApplicationEventMulticaster
 	 * @param retriever the ListenerRetriever, if supposed to populate one (for caching purposes)
 	 * @return the pre-filtered list of application listeners for the given event and source type
 	 */
+	// 检索适用于特定事件的所有应用监听器
 	@SuppressWarnings("NullAway")
 	private Collection<ApplicationListener<?>> retrieveApplicationListeners(
 			ResolvableType eventType, @Nullable Class<?> sourceType, @Nullable CachedListenerRetriever retriever) {
 
-		List<ApplicationListener<?>> allListeners = new ArrayList<>();
-		Set<ApplicationListener<?>> filteredListeners = (retriever != null ? new LinkedHashSet<>() : null);
-		Set<String> filteredListenerBeans = (retriever != null ? new LinkedHashSet<>() : null);
+		List<ApplicationListener<?>> allListeners = new ArrayList<>();  // 存储所有匹配的监听器
+		Set<ApplicationListener<?>> filteredListeners = (retriever != null ? new LinkedHashSet<>() : null);  // 存储过滤后的监听器，如果启用缓存
+		Set<String> filteredListenerBeans = (retriever != null ? new LinkedHashSet<>() : null);  // 存储过滤后的监听器bean名称，如果启用缓存
 
 		Set<ApplicationListener<?>> listeners;
 		Set<String> listenerBeans;
 		synchronized (this.defaultRetriever) {
+			// 从默认检索器获取已注册的监听器和监听器bean名称
 			listeners = new LinkedHashSet<>(this.defaultRetriever.applicationListeners);
 			listenerBeans = new LinkedHashSet<>(this.defaultRetriever.applicationListenerBeans);
 		}
 
-		// Add programmatically registered listeners, including ones coming
-		// from ApplicationListenerDetector (singleton beans and inner beans).
+		// 处理方式注册的监听器
 		for (ApplicationListener<?> listener : listeners) {
 			if (supportsEvent(listener, eventType, sourceType)) {
 				if (retriever != null) {
@@ -256,8 +257,7 @@ public abstract class AbstractApplicationEventMulticaster
 			}
 		}
 
-		// Add listeners by bean name, potentially overlapping with programmatically
-		// registered listeners above - but here potentially with additional metadata.
+		// 处理由bean名称注册的监听器
 		if (!listenerBeans.isEmpty()) {
 			ConfigurableBeanFactory beanFactory = getBeanFactory();
 			for (String listenerBeanName : listenerBeans) {
@@ -266,10 +266,7 @@ public abstract class AbstractApplicationEventMulticaster
 						ApplicationListener<?> listener =
 								beanFactory.getBean(listenerBeanName, ApplicationListener.class);
 
-						// Despite best efforts to avoid it, unwrapped proxies (singleton targets) can end up in the
-						// list of programmatically registered listeners. In order to avoid duplicates, we need to find
-						// and replace them by their proxy counterparts, because if both a proxy and its target end up
-						// in 'allListeners', listeners will fire twice.
+						// 避免重复，确保代理和其目标不会都添加到监听器列表
 						ApplicationListener<?> unwrappedListener =
 								(ApplicationListener<?>) AopProxyUtils.getSingletonTarget(listener);
 						if (listener != unwrappedListener) {
@@ -283,6 +280,7 @@ public abstract class AbstractApplicationEventMulticaster
 							}
 						}
 
+						// 如果监听器支持事件且未被添加，则添加到列表
 						if (!allListeners.contains(listener) && supportsEvent(listener, eventType, sourceType)) {
 							if (retriever != null) {
 								if (beanFactory.isSingleton(listenerBeanName)) {
@@ -296,9 +294,7 @@ public abstract class AbstractApplicationEventMulticaster
 						}
 					}
 					else {
-						// Remove non-matching listeners that originally came from
-						// ApplicationListenerDetector, possibly ruled out by additional
-						// BeanDefinition metadata (e.g. factory method generics) above.
+						// 移除不匹配的监听器
 						Object listener = beanFactory.getSingleton(listenerBeanName);
 						if (retriever != null) {
 							filteredListeners.remove(listener);
@@ -307,14 +303,15 @@ public abstract class AbstractApplicationEventMulticaster
 					}
 				}
 				catch (NoSuchBeanDefinitionException ex) {
-					// Singleton listener instance (without backing bean definition) disappeared -
-					// probably in the middle of the destruction phase
+					// 处理bean定义不存在的异常
 				}
 			}
 		}
 
+		// 对所有监听器进行排序
 		AnnotationAwareOrderComparator.sort(allListeners);
 		if (retriever != null) {
+			// 如果启用缓存，更新缓存
 			if (CollectionUtils.isEmpty(filteredListenerBeans)) {
 				retriever.applicationListeners = new LinkedHashSet<>(allListeners);
 				retriever.applicationListenerBeans = filteredListenerBeans;
@@ -324,8 +321,9 @@ public abstract class AbstractApplicationEventMulticaster
 				retriever.applicationListenerBeans = filteredListenerBeans;
 			}
 		}
-		return allListeners;
+		return allListeners;  // 返回所有匹配的监听器
 	}
+
 
 	/**
 	 * Filter a bean-defined listener early through checking its generically declared

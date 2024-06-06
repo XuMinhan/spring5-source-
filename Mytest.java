@@ -149,7 +149,7 @@
 								调用beanDefinition.registerExternallyManagedConfigMember(member)将查找到的元数据设置到Bean定义中
 			回到createBean方法，populateBean
 				获取当前正在实例化的bean的所有属性及值，mbd.getPropertyValues()，mbd.getResolvedAutowireMode()得到0，
-					如果是按照类型注入或者按照方法注入
+					如果是按照类型注入或者按照name注入
 						进入autowireByType
 							进入unsatisfiedNonSimpleProperties方法，
 								进入BeanWrapper的getPropertyDescriptors
@@ -208,10 +208,6 @@
 								退出autowireByType，进入applyPropertyValues
 									经过一大串莫名其妙的代码，最终到达BeanWrapperImpl的setValue
 										通过反射调用set方法，进行注入
-
-
-
-
 							进入autowireByName
 
 
@@ -475,11 +471,129 @@
 		 原理，创建DependencyObjectProvider后，调用getObject，调用doResolveDependency，循环注解信息，得到qualifier注解内容，查找对应的bean
 
 
+		 CommonAnnotationBeanPostProcessorTests
+		 	-> CommonAnnotationBeanPostProcessor
+		 与Autowired类似，但是findResourceMetadata有一点不同，又CommonAnnotationBPP提供
+		 	处理三种注解
+		 		package jakarta.ejb;的EJB
+		 		package jakarta.annotation;的Resource
+		 		package javax.annotation;的Resource
+		 	其他操作与Autowired注解几乎相同
+
+		 AnnotationConfigApplicationContext
+		 	定义AnnotatedBeanDefinitionReader
+		 		最终调用registerAnnotationConfigProcessors
+		 			加入后处理器
+		 				ConfigurationClassPostProcessor
+		 				AutowiredAnnotationBeanPostProcessor
+		 				CommonAnnotationBeanPostProcessor
+		 				检查 JPA 支持，如果存在，添加 PersistenceAnnotationBeanPostProcessor
+		 				EventListenerMethodProcessor
+
+		 DefaultEventListenerFactory
+
+		 ApplicationContextEventTests
+		 监听源码讲解
+		 进入publishEvent(ApplicationEvent event)
+		 	判断发进来的事件是否继承了事件
+		 		如果继承了，则是正常的事件发布
+					使用 ResolvableType.forInstance(applicationEvent)解析类型传入eventType
+		 		如果没有继承，使用typeHint捏一个PayloadApplicationEvent出来，作为事件的载体
+		 		进入multicastEvent方法
+		 			进入getApplicationListeners(event, type)方法找到所有满足条件的事件监听器
+		 			创建缓存关键字cacheKey，参数为eventType和sourceType
+					去retrieverCache中根据这个key寻找，找到对应的CachedListenerRetriever
+		 				如果有，则调用CachedListenerRetriever的getApplicationListeners
+			 				得到applicationListeners和applicationListenerBeans，其中后者现场创建
+		 				如果没有，new一个CachedListenerRetriever，加入缓存
+		 					进入retrieveApplicationListeners处理
+		 						循环listeners
+		 							进入supportsEvent
+		 								new一个GenericApplicationListenerAdapter
+		 									进入resolveDeclaredEventType
+		 										查看缓存并进入resolveDeclaredEventType
+		 											通过ResolvableType的getGeneric得到范型中的类型，即listener中的事件类型，赋值给declaredEventType
+		 								判断supportsEventType，
+		 									判断是否继承GenericApplicationListener
+		 										如果是继承的GenericApplicationListener，则他进入supportsEventType，其中的resolveTpye支持ResolvableType
+		 										如果继承了SmartApplicationListener，则进入supportsEventType，其中的resolveTpye只能用event
+		 										通过declaredEventType的isAssignableFrom判断是否实现某个接口
+		 									若是eventLister注解
+		 										进入ApplicationListenerMethodAdapter的supportsEventType
+		 											循环resolveDeclaredEventTypes
+		 												判断触发的eventType是否有未解析的类
+		 													如果有则得到主体类declaredEventType.toClass()，进行isAssignable判断
+		 													如果无则直接进行isAssignable判断即可
+		 												如果都没有通过，则判断触发的事件是否是PayloadApplicationEvent
+		 													如果是，则解析出这个类，判断isAssignable
+		 														如果解析出类是null，则直接通过即可
+		 								判断supportsSourceType，通过继承SmartApplicationListener
+		 									并且重写supportsSourceType接口做判断
+								循环listenerBeans
+		 							进入supportsEvent ****(此处可以得到由methodListener注解创建的adapter)
+		 								进入getType，其中需要创建实例，再得到tpye
+		 									如果是GenericApplicationListener或者SmartApplicationListener则直接通过
+		 									进入supportsEvent(Class<?> listenerType, ResolvableType eventType),
+		 										进入GenericApplicationListenerAdapter.resolveDeclaredEventType(listenerType);
+		 											判断是否为子类
+					 			避免重复，确保代理和其目标不会都添加到监听器列表
+		 						进入contains判断是否已经添加过
+		 							并且进入supportsEvent(listener, eventType, sourceType)判断是否源也支持
+		 								加入allListeners
+		 						对所有监听器进行排序
+		 					得到所有的listener
+		 					判断是否有setTaskExecutor存在，用于异步执行监听器的事件处理，通过setTaskExecutor设置
+		 						如果没有，则直接进入invokeListener
+		 							寻找errorHandler	: 通过setErrorHandler设置
+		 								若无，则进入doInvokeListener调用listener.onApplicationEvent
+		 								若有，则再外面包裹一层errorHandler.handleError(err);
+						寻找父类this.parent != null
+		 					判断是否是AbstractApplicationContext
+		 						如果是，则执行publishEvent(event, typeHint)
+		 						如果不是，则执行重写过的publishEvent
+
+
+		 eventListener注解讲解(publish开始)
+		 ApplicationListenerMethodAdapterTests
 
 
 
 
 
+		 监听器注册原理，从createBean开始
+		 	进入applyMergedBeanDefinitionPostProcessors(mbd, beanType, beanName);
+		 		进入ApplicationListenerDetector
+		 			执行singletonNames将beanname和listener传入这个map
+		 		进入initializeBean
+		 			进入applyBeanPostProcessorsAfterInitialization
+		 				循环getBeanPostProcessors
+		 					执行addApplicationListener添加listener
+
+
+
+		 eventListener注解原理
+			进入refresh的beanFactory.preInstantiateSingletons();
+		 		循环beanNames
+		 			得到类型为SmartInitializingSingleton的实例
+		 				执行afterSingletonsInstantiated方法
+		 					循环beanNames，进入processBean方法
+		 						找到那个带有eventListener注解的方法
+		 						执行factory.createApplicationListener(beanName, targetType, methodToUse)
+		 							new ApplicationListenerMethodAdapter(beanName, type, method);
+		 								解析BridgeMethodResolver.findBridgedMethod(method);解决两种桥接方法的情况
+		 								进入AnnotatedElementUtils.findMergedAnnotation寻找EventListener注解
+		 								进入resolveDeclaredEventTypes找到监听的类，优先解析注解，支持多个，两种写法
+		 								如果注解没有，则通过ResolvableType.forMethodParameter解析形参
+		 						加入监听器addApplicationListener
+
+
+
+
+
+		 GenericApplicationContextTests
+		 	GenericApplicationContext
+		 		初始化就是一个dlbf
+		 refresh方法
 
 
 
@@ -635,16 +749,13 @@
  *
 
 			AbstractApplicationContext
-
-			GenericApplicationContext
-				初始化就是新建一个DefaultListableBeanFactory
-					initPropertySources
+\
 
 			AnnotationConfigApplicationContext
 
 			ClassPathXmlApplicationContext
 
-
+			事件发布暂时搁置
 
 
 				分布式 10
