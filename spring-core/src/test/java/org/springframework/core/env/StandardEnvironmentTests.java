@@ -356,7 +356,11 @@ class StandardEnvironmentTests {
 		@Test
 		void fromSystemProperties_withMultipleProfiles() {
 			try {
+
 				System.setProperty(ACTIVE_PROFILES_PROPERTY_NAME, "foo,bar");
+				environment.setActiveProfiles("abc");
+
+
 				assertThat(environment.getActiveProfiles()).containsExactly("foo", "bar");
 			}
 			finally {

@@ -578,13 +578,67 @@
 		 				执行afterSingletonsInstantiated方法
 		 					循环beanNames，进入processBean方法
 		 						找到那个带有eventListener注解的方法
-		 						执行factory.createApplicationListener(beanName, targetType, methodToUse)
+		 						执行DefaultEventListenerFactory的factory.createApplicationListener(beanName, targetType, methodToUse)
 		 							new ApplicationListenerMethodAdapter(beanName, type, method);
 		 								解析BridgeMethodResolver.findBridgedMethod(method);解决两种桥接方法的情况
 		 								进入AnnotatedElementUtils.findMergedAnnotation寻找EventListener注解
 		 								进入resolveDeclaredEventTypes找到监听的类，优先解析注解，支持多个，两种写法
 		 								如果注解没有，则通过ResolvableType.forMethodParameter解析形参
 		 						加入监听器addApplicationListener
+
+		 StandardEnvironmentTests->
+			new一个StandardEnvironment
+		 		直接跳到new一个AbstractEnvironment，不过可以选择source
+		 			new一个MutablePropertySources()
+		 				进入MutablePropertySources(PropertySources propertySources)
+		 					设置propertySources
+		 					设置源解析器ConfigurablePropertyResolver propertyResolver
+		 					进入customizePropertySources设置定制化的初始化源
+		 						StandardEnvironment的具体实现是  :此二者都是传入了一个map的地址，所以可以动态变化
+		 							设置PropertiesPropertySource System.getProperties();
+		 							设置SystemEnvironmentPropertySource
+		 								判断是否suppressGetenvAccess
+		 									即是否设置了System.setProperty("spring.getenv.ignore", "true");
+		 									System.getenv();
+
+		getActiveProfiles
+			进入doGetActiveProfiles
+				进入doGetActiveProfilesProperty
+					如果activeProfiles是非空的		此处可以通过environment.setActiveProfiles("local", "embedded");进行设置
+						则直接返回
+					如果是空的
+						则进入getProperty("spring.profiles.active")		此处可以通过System.setProperty(ACTIVE_PROFILES_PROPERTY_NAME, " bar , baz ");进行设置
+							进入this.propertyResolver.getProperty(key);通过解析器解析
+							将得到的Str切割，放入activeProfiles
+
+		addActiveProfile
+			进入doGetActiveProfiles
+				遍历add进去
+
+		getDefaultProfiles
+			进入doGetDefaultProfiles
+				如果没有改变defaultProfiles	(它的初始化就是一个default)
+					则去getProperty(spring.profiles.default)中寻找
+				如果改变了，即不是default，则直接返回即可
+
+		setDefaultProfiles同理，无add方法
+
+		isProfileActive方法
+			先进入validateProfile判断
+				非空且不是"!"开头
+			通过doGetActiveProfiles得到currentActiveProfiles
+				判断是否contain这个profile
+					如果不包含，并且为空
+						则去doGetDefaultProfiles中找，查看是否contain
+
+		acceptsProfiles方法
+			循环传入的string数组
+				如果是 ! 开头,则!isProfileActive成立即true
+				如果不是 ! 开头,则isProfileActive成立则true
+			循环完成都没有true则返回false
+
+
+	 StandardEnvironment()
 
 
 
