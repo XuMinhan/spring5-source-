@@ -79,12 +79,12 @@ public interface AnnotationMetadata extends ClassMetadata, AnnotatedTypeMetadata
 		return getAnnotations().isDirectlyPresent(annotationName);
 	}
 
-	/**
-	 * Determine whether the underlying class has an annotation that is itself
-	 * annotated with the meta-annotation of the given type.
-	 * @param metaAnnotationName the fully-qualified class name of the
-	 * meta-annotation type to look for
-	 * @return {@code true} if a matching meta-annotation is present
+/**
+	 * 确定基础类是否具有本身的注释
+	 * 使用给定类型的元注释进行注释。
+	 * @param metaAnnotationName 的完全限定类名
+	 * 要查找的元注释类型
+	 * @return {@code true} 如果存在匹配的元注释
 	 */
 	default boolean hasMetaAnnotation(String metaAnnotationName) {
 		return getAnnotations().get(metaAnnotationName,

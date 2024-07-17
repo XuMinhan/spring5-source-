@@ -638,16 +638,237 @@
 			循环完成都没有true则返回false
 
 
+		ClassPathBeanDefinitionScanner原理
+		ClassPathBeanDefinitionScannerTests
+		new PathMatchingResourcePatternResolver(this)给AbstractApplicationContext的resourcePatternResolver
+		执行一个new ClassPathBeanDefinitionScanner(context);
+		 	进入registerDefaultFilters
+		 		在includeFilters中增加
+		 			Component.class / jakarta.annotation.ManagedBean
+		 			javax.annotation.ManagedBean / jakarta.inject.Named / javax.inject.Named
+		 	设置环境setEnvironment(environment);
+		 	设置资源加载器setResourceLoader
+		 		进入ClassPathScanningCandidateComponentProvider
+		 		设置resourcePatternResolver为applicationContext
+		 		设置metadataReaderFactory为一个SimpleMetadataReaderFactory
+		 			设置它的资源加载器，此处为applicationContext
+		 		设置componentsIndex
+		 			进入CandidateComponentsIndexLoader.loadIndex
+		 				进入CandidateComponentsIndexLoader
+		 					设置缓存为cache.computeIfAbsent(classLoaderToUse, CandidateComponentsIndexLoader::doLoadIndex)
+		 						设置同一个类加载器的CandidateComponentsIndex
+		 						如果是空，则进入doLoadIndex
+		 							从 META-INF/spring.components 执行classLoader.getResources
+		 								如果有 则调用PropertiesLoaderUtils.loadProperties加载url
+		 								    得到一个properties，包含键值对
+		 								        new一个CandidateComponentsIndex，parseIndex(content)
+		 								        处理方式为 key-value1,value2 -> value1-key value2-key
+		 								没有 则返回 null
+		 					设置cache，key为类加载器，value为index，包含properties的解析结果
+		 	scanner设置完成
+		执行scan原理
+		进入scan方法
+		 	计数beanCountAtScanStart，通过getBeanDefinitionCount得到已经加载的定义的数量
+			进入doScan
+		 		循环传入的包名
+		 			进入findCandidateComponents
+		 				如果有componentsIndex和includeFilters的存在，则进入addCandidateComponentsFromIndex
+		 				    从includeFilters中取出filter并且遍历
+                                通过extractStereotype取出名字
+                                进入index.getCandidateTypes传入包名和过滤器名
+                                执行index.get(stereotype)得到过滤器对应的List
+                                进行流操作，过滤判断是否为此包，流成一个set，加入types
+		 				    循环结束，过滤器对应的参数均已取出
+		 				    遍历types
+		 				        getMetadataReaderFactory().getMetadataReader(type);
+		 				            改变一下路径
+		 				                例如将example.scannable.NamedStubDao
+		 				                ->  classpath:example/scannable/NamedStubDao.class
+		 				            进入this.resourceLoader.getResource
+		 				                如果是classpath:开头
+		 				                    new一个ClassPathResource，设置path和classLoader，path为去掉classpath
+		 				            进入getMetadataReader(resource)
+		 				                查找缓存，进入super.getMetadataReader
+		 				                    进入SimpleMetadataReaderFactory提供的getMetadataReader
+		 				                        new一个SimpleMetadataReader，传入resource和类加载器
+		 				                            new一个SimpleAnnotationMetadataReadingVisitor，传入类加载器
+		 				                            getClassReader(resource)做一个类读取器，并且执行accept(visitor, PARSING_OPTIONS);
+		 				                            赋值annotationMetadata为visitor.getMetadata();
+		 				            得到元数据读取器，退出，其中包含了类名和类的信息
+		 				            进入isCandidateComponent(metadataReader)判断
+		 				                循环excludeFilters，如果match上了，则返回false
+		 				                循环includeFilters，如果match上了，则判断是否isConditionMatch
+		 				                match原理
+		 				                    进入matchSelf(AnnotationTypeFilter)
+		 				                        metadata.hasAnnotation(this.annotationType.getName())判断是否有这个注解,直系
+		 				                        或者metadata.hasMetaAnnotation(this.annotationType.getName() todo
+		 				                isConditionMatch原理
+		 				                    得到conditionEvaluator
+		 				                        判断conditionEvaluator.shouldSkip(metadataReader.getAnnotationMetadata())
+		 				            如果都通过，new一个ScannedGenericBeanDefinition接受类读取器，得到sbd
+		 				            进入isCandidateComponent(sbd)
+		 				                如果metadata.isIndependent()且他是具体类，或者抽象类带上lookup，则返回true
+
+		 				否则进入scanCandidateComponents (没有建立过索引)
+		 					处理包名 example.scannable : classpath*:example/scannable/**/*.class
+							进入getResourcePatternResolver().getResources,此处由generic上下文提供
+							    判断是否实现ResourcePatternResolver接口，如果是，则进入ResourcePatternResolver提供的
+							    如果不是，即为上下文，则进入抽象应用上下文的getResources
+							    进入this.resourcePatternResolver.getResources(locationPattern)
+            回到doScan，得到candidates
+                循环候选项
+                    得到scopeMetadataResolver，执行resolveScopeMetadata(candidate)
+                        寻找scope注解，如果没有，则直接设置单例，如果有则设置value对应的String
+                    得到beanNameGenerator,执行this.beanNameGenerator.generateBeanName(candidate, this.registry)
+                        determineBeanNameFromAnnotation(annotatedBeanDefinition)
+                            进入getExplicitBeanName得到显示的beanName
+                                在注解中得到 "value"对应的值
+                            如果没有得到显示的beanName
+                                得到mergedAnnotations，过滤器为isDirectlyPresent
+                                循环得到的注解
+                                    进入isStereotypeWithNameValue判断
+                                        如果是那五个注解之一，得到对应的value值设置为beanName
+                        如果都没有设置名字成功，则进入buildDefaultBeanName
+                            得到全名，得到最后一段，将开头换成小写，作为默认beanName
+                    判断是否实现AbstractBeanDefinition，即定义的通用接口
+                        进入postProcessBeanDefinition
+                            设置一个applyDefaults默认的BeanDefinitionDefaults，其中包括lazyInit，自动装配模式，依赖检查，初始化和销毁方法
+                                在autowireCandidatePatterns中寻找这个bean，进入setAutowireCandidate
+                    判断是否实现AnnotatedBeanDefinition
+                        进入processCommonDefinitionAnnotations
+                            处理通用注解。例如：@Lazy，@Primary，@Role，@DependsOn，@Description
+                    创建一个包装类definitionHolder
+                    通过AnnotationConfigUtils.applyScopedProxyMode处理一下
+                    执行registerBeanDefinition参数为包装类
+                        执行真正的registerBeanDefinition
+                        并且注册registerAlias别名
+            判断includeAnnotationConfig
+                AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);
+                    得到工厂
+                        setDependencyComparator
+                        setAutowireCandidateResolver todo
+                    注册后处理器registerPostProcessor
+                        ConfigurationClassPostProcessor
+                        AutowiredAnnotationBeanPostProcessor
+                        CommonAnnotationBeanPostProcessor
+                        EventListenerMethodProcessor
+                        DefaultEventListenerFactory
+
+
+        AnnotationMetadata原理
+        AnnotationMetadataTests
+
+
+        MergedAnnotationsCollection原理
+        MergedAnnotationsCollectionTests
+
+        ConditionEvaluator原理
+
+        resourcePatternResolver原理
+
+
+
+
 	 StandardEnvironment()
 
 
 
 
-
+     ConfigurationApplicationContext
 		 GenericApplicationContextTests
 		 	GenericApplicationContext
 		 		初始化就是一个dlbf
+
 		 refresh方法
+		    prepareRefresh();
+		        initPropertySources();Spring留给开发人员的一个扩展点.
+		        getEnvironment().validateRequiredProperties();
+		            校验在getEnvironment().setRequiredProperties(String... keys)设置的必须的属性
+		        new一个earlyApplicationEvents，todo
+		    obtainFreshBeanFactory()获取工厂
+		    进入prepareBeanFactory(beanFactory)bean工厂的初始化准备工作，设置bean工厂的一些属性创建bean工厂时
+		        需要忽略哪些接口，需要注册哪些bean，需要设置哪些Bean的后置处理器等
+		        setBeanClassLoader设置类加载器
+		        setBeanExpressionResolver设置表达式解析器
+		            new 一个StandardBeanExpressionResolvers todo
+                addPropertyEditorRegistrar增加属性编辑注册器 todo
+                addBeanPostProcessor(new ApplicationContextAwareProcessor(this));
+                ignoreDependencyInterface忽视好多个通过接口实现的注入
+                registerResolvableDependency注册一些依赖，todo
+                addBeanPostProcessor ApplicationListenerDetector增加监听探测器
+                registerSingleton 将环境，系统环境，系统属性，getApplicationStartup注册成bean
+            进入invokeBeanFactoryPostProcessors调用bean工厂后处理器，处理bean工厂
+                通过后处理器注册代理，执行invokeBeanFactoryPostProcessors，
+                        传入bean工厂后处理器，由getBeanFactoryPostProcessors()得到，只能由context.addBeanFactoryPostProcessor添加，可通过lambda或者一个类传入
+                    循环传入的beanFactoryPostProcessors，
+                        如果实现了BeanDefinitionRegistryPostProcessor
+                            执行postProcessBeanDefinitionRegistry方法
+                            并且registryProcessors.add(registryProcessor);用于最后执行postProcessBeanFactory方法(几乎无使用场景)
+                        如果只是普通BeanFactoryPostProcessor，则加入regularPostProcessors，等待后续执行postProcessBeanFactory方法即可
+                    beanFactory.getBeanNamesForType，得到BeanDefinitionRegistryPostProcessor类型的bean
+                        此处得到了configuration注解处理器
+                        判断是否实现order，若有，则加入后续处理
+                        全部添加到currentRegistryProcessors中，用于最后执行postProcessBeanFactory
+                    遍历所有的得到的bean，执行其postProcessBeanDefinitionRegistry方法
+
+                    再执行一遍beanFactory.getBeanNamesForType以及以下的内容
+                        因为上面执行完了所有的BeanDefinitionRegistryPostProcessor类之后
+                            可能又新增了其他的BeanDefinitionRegistryPostProcessor
+
+                    最后把没有实现order的拿出来，过滤掉已经执行过的，执行postProcessBeanDefinitionRegistry
+
+                    遍历所有的后处理器，执行postProcessBeanFactory方法，包括registryProcessors和regularPostProcessors
+
+                    // 至此，上面的过程已经处理完了入参beanFactoryPostProcessors和容器中所有的BeanDefinitionRegistryPostProcessor
+
+                    beanFactory.getBeanNamesForType(BeanFactoryPostProcessor.class,
+                        查找容器中所有实现了BeanFactoryPostProcessor接口的实现类
+                    进行primaryOrder/Order/无order注解的处理
+                    得到bean，并且执行postProcessBeanFactory方法
+
+            进入registerBeanPostProcessors(beanFactory)注册所有bean的后置处理器.用来拦截Bean的创建
+                使用PostProcessorRegistrationDelegate的registerBeanPostProcessors方法
+                    通过beanFactory.getBeanNamesForType(BeanPostProcessor.class....)得到bean处理器的name
+                        这玩意在AnnotationConfigurationApplicationContext的注解扫描器中定义过
+                    计算得出beanProcessorTargetCount的总数，要加上抽象类中定义的后处理器，在prepareBeanFactory(beanFactory)中添加
+                    初始化并且添加BeanPostProcessorChecker
+                    循环postProcessorNames
+                    registerBeanPostProcessors注册bean后处理器，同样进行primaryOrder/Order/无order注解的处理
+                        如果实现了MergedBeanDefinitionPostProcessor
+                        排序并且调用registerBeanPostProcessors，如果有重复则remove原来的，再add todo 为什么要重加
+                    最后调用addBeanPostProcessor ApplicationListenerDetector
+
+            进入initMessageSource
+                创建一个DelegatingMessageSource类型的messageSource对象
+                执行dms.setParentMessageSource(getInternalParentMessageSource());为null todo
+                执行registerSingleton注册进这个dms
+
+            进入initApplicationEventMulticaster();初始化事件派发器，用来发布事件
+                new 一个 SimpleApplicationEventMulticaster(beanFactory)
+                执行registerSingleton，注册事件发布器的单例
+
+            进入onRefresh();
+                用来初始化一些特殊的Bean，目前默认是空方法，未实现
+                可以通过继承AbstractApplicationContext类，然后覆写该方法进行自定义特殊bean的初始化.
+                SpringBoot也是在该步骤中启动内嵌Tomcat容器的
+
+            进入registerListeners();注册监听器
+                循环getApplicationListeners()的所有监听器
+                    执行getApplicationEventMulticaster().addApplicationListener(listener);注册进入
+                循环getBeanNamesForType(ApplicationListener.class...)
+                    执行getApplicationEventMulticaster().addApplicationListenerBean(listenerBeanName);注册进入
+                    播放所有的earlyApplicationEvents
+                执行finishRefresh
+                    清除所有缓存
+                    initLifecycleProcessor();
+                        设置DefaultLifecycleProcessor并且注册单例 todo
+                        发送刷新事件
+                            publishEvent(new ContextRefreshedEvent(this));
+            结束refresh方法
+
+     DefaultLifecycleProcessorTests
+        生命周期的start和stop
+        context的开始和结束的时候寻找实现接口的bean
 
 
 
@@ -802,6 +1023,57 @@
 	 *					异常执行：前置通知->目标方法->后置通知->异常通知
  *
 
+
+
+Spring的AOP实现原理其实很简单，就是通过动态代理实现的。如果我们为Spring的某个bean配置了切面，那么Spring在创建这个bean的时候，实际上创建的是这个bean的一个代理对象，我们后续对bean中方法的调用，实际上调用的是代理类重写的代理方法。而Spring的AOP使用了两种动态代理，分别是JDK的动态代理，以及CGLib的动态代理。
+
+（一）JDK动态代理
+
+Spring默认使用JDK的动态代理实现AOP，类如果实现了接口，Spring就会使用这种方式实现动态代理。熟悉Java语言的应该会对JDK动态代理有所了解。JDK实现动态代理需要两个组件，首先第一个就是InvocationHandler接口。我们在使用JDK的动态代理时，需要编写一个类，去实现这个接口，然后重写invoke方法，这个方法其实就是我们提供的代理方法。然后JDK动态代理需要使用的第二个组件就是Proxy这个类，我们可以通过这个类的newProxyInstance方法，返回一个代理对象。生成的代理类实现了原来那个类的所有接口，并对接口的方法进行了代理，我们通过代理对象调用这些方法时，底层将通过反射，调用我们实现的invoke方法。
+
+（二）CGLib动态代理
+
+JDK的动态代理存在限制，那就是被代理的类必须是一个实现了接口的类，代理类需要实现相同的接口，代理接口中声明的方法。若需要代理的类没有实现接口，此时JDK的动态代理将没有办法使用，于是Spring会使用CGLib的动态代理来生成代理对象。CGLib直接操作字节码，生成类的子类，重写类的方法完成代理。
+
+以上就是Spring实现动态的两种方式，下面我们具体来谈一谈这两种生成动态代理的方式。
+
+
+
+（一）实现原理
+
+JDK的动态代理是基于反射实现。JDK通过反射，生成一个代理类，这个代理类实现了原来那个类的全部接口，并对接口中定义的所有方法进行了代理。当我们通过代理对象执行原来那个类的方法时，代理类底层会通过反射机制，回调我们实现的InvocationHandler接口的invoke方法。并且这个代理类是Proxy类的子类（记住这个结论，后面测试要用）。这就是JDK动态代理大致的实现方式。
+
+（二）优点
+
+JDK动态代理是JDK原生的，不需要任何依赖即可使用；
+通过反射机制生成代理类的速度要比CGLib操作字节码生成代理类的速度更快；
+（三）缺点
+
+如果要使用JDK动态代理，被代理的类必须实现了接口，否则无法代理；
+JDK动态代理无法为没有在接口中定义的方法实现代理，假设我们有一个实现了接口的类，我们为它的一个不属于接口中的方法配置了切面，Spring仍然会使用JDK的动态代理，但是由于配置了切面的方法不属于接口，为这个方法配置的切面将不会被织入。
+JDK动态代理执行代理方法时，需要通过反射机制进行回调，此时方法执行的效率比较低；
+
+
+（一）实现原理
+
+CGLib实现动态代理的原理是，底层采用了ASM字节码生成框架，直接对需要代理的类的字节码进行操作，生成这个类的一个子类，并重写了类的所有可以重写的方法，在重写的过程中，将我们定义的额外的逻辑（简单理解为Spring中的切面）织入到方法中，对方法进行了增强。而通过字节码操作生成的代理类，和我们自己编写并编译后的类没有太大区别。
+
+（二）优点
+
+使用CGLib代理的类，不需要实现接口，因为CGLib生成的代理类是直接继承自需要被代理的类；
+CGLib生成的代理类是原来那个类的子类，这就意味着这个代理类可以为原来那个类中，所有能够被子类重写的方法进行代理；
+CGLib生成的代理类，和我们自己编写并编译的类没有太大区别，对方法的调用和直接调用普通类的方式一致，所以CGLib执行代理方法的效率要高于JDK的动态代理；
+（三）缺点
+
+由于CGLib的代理类使用的是继承，这也就意味着如果需要被代理的类是一个final类，则无法使用CGLib代理；
+由于CGLib实现代理方法的方式是重写父类的方法，所以无法对final方法，或者private方法进行代理，因为子类无法重写这些方法；
+CGLib生成代理类的方式是通过操作字节码，这种方式生成代理类的速度要比JDK通过反射生成代理类的速度更慢；
+
+
+
+
+spring事务
+https://juejin.cn/post/7106158883055353870
 			AbstractApplicationContext
 \
 

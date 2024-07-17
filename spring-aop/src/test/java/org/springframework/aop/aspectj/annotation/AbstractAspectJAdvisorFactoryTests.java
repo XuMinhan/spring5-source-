@@ -794,6 +794,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 
 		@Pointcut("execution(* echo(*))")
 		void echo() {
+
 		}
 
 		@Around("echo()")
